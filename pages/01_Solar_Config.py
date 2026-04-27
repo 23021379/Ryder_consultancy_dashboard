@@ -95,8 +95,8 @@ with col_display:
             fixed_bos = 80000
             total_cost = panel_cost + mounting_and_labour + fixed_bos
             
-            # Financial Returns (Assuming a conservative £0.25/kWh Commercial Rate)
-            commercial_electricity_rate = 0.25
+            # Financial Returns Using north tyneside's 0.32 £/kWh commercial rate
+            commercial_electricity_rate = 0.32
             annual_savings = yield_val * commercial_electricity_rate
             
             # Additional derived metrics
