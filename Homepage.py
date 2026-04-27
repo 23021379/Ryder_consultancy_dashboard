@@ -45,13 +45,13 @@ left, right = st.columns(2)
 with left:
     with st.container():
         if st.button("Solar Configuration"):
-            st.switch_page("pages/01_solar_config.py")
+            st.switch_page("pages/01_Solar_Config.py")
 
         st.caption("View metrics and adjust solar configuration")
 
 with right:
     with st.container():
         if st.button("Forecast"):
-            st.switch_page("pages/02_forecast.py")
+            st.switch_page("pages/02_Forecasts.py")
 
         st.caption("View grid, solar and weather forecasts")
