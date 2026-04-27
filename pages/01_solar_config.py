@@ -23,6 +23,10 @@ st.markdown("""
     }
     .stApp {
         background-color: #f7f9fc;
+        color: #1a2b4c;
+    }
+    p, span, label, div.stMarkdown, div.stText {
+        color: #1a2b4c;
     }
 </style>
 """, unsafe_allow_html=True)
