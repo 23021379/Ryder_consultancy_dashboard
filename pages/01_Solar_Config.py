@@ -114,7 +114,7 @@ with col_display:
             with st.container(border=True):
                 st.markdown("**Overview & ROI**")
                 m1, m2, m3, m4, m5 = st.columns(5)
-                m1.metric("Annual Yield", f"{yield_val / 1000:,.1f} MWh")
+                m1.metric("Annual Yield", f"{yield_val / 1000:,.1f} kWh")
                 m2.metric("Annual Savings", f"£{annual_savings / 1000:,.1f}k")
                 m3.metric("System Size", f"{system_kwp:,.0f} kWp")
                 m4.metric("Est. Total Cost", f"£{total_cost / 1000:,.1f}k")
