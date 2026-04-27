@@ -1,3 +1,13 @@
-type "streamlit run 'path to app.py'" into terminal eg: "streamlit run c:/users/download/ryder_consultancy_dashboard/app.py"
+# Ryder Consultancy Dashboard
 
-If it gives you this error "Error: Streamlit requires raw Python (.py) files, but the provided file has no extension.", just type "streamlit run app.py" into terminal instead.
+Dasboard created for Ryder as part of the KV5037 Group Consultancy Project
+
+## Setup
+
+1. Install requirements via `pip install -r requirements.txt`
+2. Use `streamlit run 'Homepage.py` to run the program
+
+## Pages
+
+- Solar Config
+- Forecasts
