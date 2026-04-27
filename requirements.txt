@@ -1,4 +1,4 @@
-# Make sure to run in a Python 3.11/3.12 environment
+# Make sure to run in a Python 3.11/3.12/3.13 environment
 
 streamlit==1.55.0
 pandas==2.3.3
