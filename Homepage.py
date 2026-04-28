@@ -40,18 +40,25 @@ st.title("JEBEX dashboard")
 
 st.write("Select modules below or use the navbar.")
 
+col1, col2, col3 = st.columns(3)
 
-left, right = st.columns(2)
-with left:
-    with st.container():
-        if st.button("Solar Configuration"):
+with col1:
+    with st.container(border=True):
+        st.subheader("Solar Configuration")
+        if st.button("Open Solar"):
             st.switch_page("pages/01_Solar_Config.py")
-
         st.caption("View metrics and adjust solar configuration")
 
-with right:
-    with st.container():
-        if st.button("Forecast"):
+with col2:
+    with st.container(border=True):
+        st.subheader("Forecast")
+        if st.button("Open Forecast"):
             st.switch_page("pages/02_Forecasts.py")
-
         st.caption("View grid, solar and weather forecasts")
+
+with col3:
+    with st.container(border=True):
+        st.subheader("Fault Detection")
+        if st.button("Open Fault Detection"):
+            st.switch_page("pages/03_Fault_Monitor.py")
+        st.caption("View fault analysis")
