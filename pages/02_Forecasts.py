@@ -69,7 +69,7 @@ with col_head1:
 bess_action = calculate_optimal_action(hourly_yield if yield_total > 0 else None, agile_prices)
 
 with col_head2:
-    st.info(bess_action.get("current_action_str", "**ACTION**: Standard Operation (Optimization Offline)"))
+    st.info(bess_action.get("current_action_str", "**ACTION**: Standard Operation (Optimisation Offline)"))
 
 st.divider()
 
@@ -215,4 +215,4 @@ with col_right:
              for action in schedule:
                   st.write(f" **{action['time']}**  Expected 1.78 MWh ({action['type']} at {action['price']:.1f}p)")
         else:
-             st.write("Schedule Optimization Offline")
+             st.write("Schedule Optimisation Offline")

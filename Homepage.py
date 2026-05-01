@@ -70,4 +70,11 @@ with col1:
         st.subheader("Staff and Patient Experience")
         if st.button("Open", key=4):
             st.switch_page("pages/04_Staff_and_Patient_Experience.py")
-        st.caption("View Seydina")
+        st.caption("View Staff and Patient Experience")
+
+with col2:
+    with st.container(border=True):
+        st.subheader("Energy Report")
+        if st.button("Open Energy Report"):
+            st.switch_page("pages/04_Energy_report.py")
+        st.caption("View energy report")
