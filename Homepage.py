@@ -58,16 +58,9 @@ with col2:
 
 with col3:
     with st.container(border=True):
-        st.subheader("Fault Detection")
+        st.subheader("Fault Detection and energy report")
         if st.button("Open", key=3):
-            st.switch_page("pages/03_Fault_Monitor.py")
+            st.switch_page("pages/03_Fault_Monitor_energy_report.py")
         st.caption("View fault analysis")
 
-col1, col2 = st.columns(2)
 
-with col1:
-    with st.container(border=True):
-        st.subheader("Energy Report")
-        if st.button("Open Energy Report"):
-            st.switch_page("pages/04_Energy_report.py")
-        st.caption("View energy report")

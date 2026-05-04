@@ -3,10 +3,15 @@
 Completely Generated
 
 """
-
+import matplotlib.pyplot as plt
+from executors.exec_data_loader import load_data
+from executors.exec_optimizer import get_optimum_configuration
+from executors.exec_cross_section import generate_single_cross_section
+import plotly.express as px
+import pandas as pd
+import plotly.graph_objects as go
 import io
 import os
-
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 
@@ -158,19 +163,29 @@ STATUS_COLORS_RGB = {
 
 STATUS_FILL_RGBA = {
     "ok":      (52,  168,  83,  210),
-    "warning": (251, 188,   5,  210),
-    "alert":   (234,  67,  53,  210),
+    "warning": (234,  67,  53,  210),
+    "alert":   (251, 188,   5,  210),
     "offline": (189, 193, 198,  210),
 }
 
 GROUP_ACCENT_COLORS = [
-    (66,  133, 244),   # blue
     (234,  67,  53),   # red
+    (251, 188, 5),  # yellow
     (52,  168,  83),   # green
     (251, 188,   5),   # yellow
-    (103,  58, 183),   # purple
-    (0,   172, 193),   # teal
 ]
+
+wards = [
+    'Outpatient Dialysis', 'Stroke Ward', "Children's Ward", 'Trauma', 'Elderly Care',
+    'Maternity', 'X-ray', 'Radiotherapy', 'Emergency Decision Unit',
+    'Main Theatre', 'Pathology', 'Day Clinic', 'CCU'
+]
+consumption = [13.6, 16.3, 8.8, 11.3, 10.4, 21.2, 20.6, 24.1, 13.2, 45.8, 47.9, 12.8, 15.5]
+
+edited_consumption = [13.7, 14.5, 8.2, 11.3, 14.0, 21.3, 23.8, 23.2, 16.9, 47.7, 47.6, 13.7, 15.6]
+
+differences = [e - o for e, o in zip(edited_consumption, consumption)]
+room_consumption = dict(zip(wards, differences))
 
 def group_color(groups: list[str], group_name: str) -> tuple:
     idx = groups.index(group_name) if group_name in groups else 0
@@ -247,19 +262,66 @@ def placeholder_floor_plan(w: int = 900, h: int = 600) -> Image.Image:
 
     # Room outlines
     rooms = [
-        (60,  60,  300, 220, "Ward A"),
-        (60,  260, 300, 420, "Ward B"),
-        (340, 60,  580, 180, "ICU"),
-        (340, 220, 580, 420, "Server Room"),
-        (620, 60,  860, 280, "Mechanical Plant"),
-        (620, 320, 860, 520, "Electrical"),
-        (60,  460, 580, 560, "Corridor"),
+        # Top row (3 rooms)
+        (60, 60, 340, 220, "Outpatient Dialysis"),
+        (360, 60, 620, 220, "Stroke Ward"),
+        (640, 60, 860, 220, "Childrens Ward"),
+
+        # Middle-top row (3 rooms)
+        (60, 240, 280, 400, "Trauma"),
+        (300, 240, 520, 400, "Elderly Care"),
+        (540, 240, 760, 400, "Maternity"),
+        (780, 240, 860, 400, "X-Ray"),
+
+        # Middle-bottom row (3 rooms)
+        (60, 420, 220, 560, "Radiotherapy"),
+        (240, 420, 420, 560, "Emergency Decision Unit"),
+        (440, 420, 620, 560, "Main Theatre"),
+
+        # Bottom corridor + 3 small rooms
+        (640, 420, 720, 560, "Pathology"),
+        (740, 420, 800, 560, "Day Care"),
+        (820, 420, 860, 560, "CCU"),
     ]
+
+
+    def consumption_to_color(diff, threshold=0.25):
+        """
+        Green if using less than baseline (negative diff),
+        Red if using more than baseline (positive diff),
+        Gray if within threshold of baseline.
+        """
+        if diff < -threshold:
+            return (80, 200, 80, 80)  # green - using less (R=80, G=200, B=80)
+        elif diff > threshold:
+            return (220, 60, 60, 80)  # red - using more (R=220, G=60, B=60)
+        else:
+            return (180, 180, 180, 80)  # gray - about the same
+
+    if room_consumption:
+        values = list(room_consumption.values())
+        avg_val = sum(values) / len(values)
+    else:
+        avg_val = 1
+
     for x1, y1, x2, y2, label in rooms:
+        if room_consumption and label in room_consumption:
+            fill_color = consumption_to_color(room_consumption[label], avg_val)
+        else:
+            fill_color = (200, 210, 225, 60)
+
+        # Draw filled rectangle with RGBA overlay
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        overlay_draw.rectangle([x1, y1, x2, y2], fill=fill_color)
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        # Room outline and label
         draw.rectangle([x1, y1, x2, y2], outline=(180, 190, 210), width=2)
         draw.text(
             ((x1 + x2) // 2 - len(label) * 3, (y1 + y2) // 2 - 8),
-            label, fill=(160, 170, 190),
+            label, fill=(60, 70, 90),
         )
 
     draw.text((w // 2 - 180, h - 32),
@@ -280,97 +342,36 @@ groups  = sorted(set(d.group for d in devices))
 status_counts = {s: sum(1 for d in devices if d.status == s)
                  for s in ("ok", "warning", "alert", "offline")}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Sidebar
-# ─────────────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### Floor Plan Sensors")
-    st.caption("Fault Monitor")
-    st.divider()
-
-    # Floor plan selector
-    active_floor = st.selectbox(
-        "Floor Plan",
-        floor_plan_names,
-        index=floor_plan_names.index(st.session_state.active_floor),
-    )
-    if active_floor != st.session_state.active_floor:
-        st.session_state.active_floor = active_floor
-        st.session_state.selected_device_id = None
-        st.rerun()
-
-    # Image upload
-    st.markdown("**Upload Floor Plan Image**")
-    uploaded = st.file_uploader(
-        "PNG, JPEG or WebP",
-        type=["png", "jpg", "jpeg", "webp"],
-        label_visibility="collapsed",
-    )
-    if uploaded:
-        st.session_state.floor_plan_img = Image.open(uploaded).convert("RGB")
-        st.success("Floor plan loaded")
-
-    st.divider()
-
-    # Group legend
-    st.markdown("**Groups**")
-    for i, g in enumerate(groups):
-        gc = GROUP_ACCENT_COLORS[i % len(GROUP_ACCENT_COLORS)]
-        hex_color = "#{:02x}{:02x}{:02x}".format(*gc)
-        count = sum(1 for d in devices if d.group == g)
-        st.markdown(
-            f"<span style='color:{hex_color};font-size:1rem;font-weight:700'>&#9632;</span>"
-            f" <span style='font-size:0.85rem;color:#1a2b4c'>{g}</span>"
-            f" <span style='font-size:0.75rem;color:#9ca3af'>({count})</span>",
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-    backend_ok = backend.health_check()
-    st.caption(
-        f"Backend: **{'FAKE DATA' if type(backend).__name__ == 'FakeSensorBackend' else 'LIVE'}** "
-        f"· {'Connected' if backend_ok else 'Unreachable'}"
-    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Header — matches existing page structure
 # ─────────────────────────────────────────────────────────────────────────────
-col_head1, col_head2 = st.columns([3, 1])
-with col_head1:
-    st.title("Fault Monitor")
 
-with col_head2:
-    alert_count = status_counts["alert"]
-    warn_count  = status_counts["warning"]
-    if alert_count > 0:
-        st.error(f"**{alert_count} ACTIVE ALERT{'S' if alert_count > 1 else ''}** — requires attention")
-    elif warn_count > 0:
-        st.warning(f"**{warn_count} WARNING{'S' if warn_count > 1 else ''}** — review recommended")
-    else:
-        st.success("**ALL SYSTEMS NOMINAL**")
+st.title("Energy Report")
+
 
 st.divider()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main layout: floor plan | device list | detail panel
 # ─────────────────────────────────────────────────────────────────────────────
-col_map, col_list, col_detail = st.columns([2.2, 1.1, 1.1], gap="medium")
-
+col_average, col_current, col_dif = st.columns([1, 1, 1])
+col_map, col_info = st.columns([3,1])
 # ── COLUMN 1: Floor plan map ──────────────────────────────────────────────────
 with col_map:
     with st.container(border=True):
         st.subheader(f"Floor Plan — {st.session_state.active_floor}")
         st.caption(
-            f"{len(devices)} devices · "
-            f"{status_counts['ok']} OK · "
-            f"{status_counts['warning']} Warning · "
-            f"{status_counts['alert']} Alert · "
-            f"{status_counts['offline']} Offline"
+            "13 wards · "
+            "2 Efficient · "
+            "3 Inefficient · "
+            "8 Nominal · "
+            "0 Other"
         )
 
         base_img = st.session_state.floor_plan_img or placeholder_floor_plan()
         rendered = render_floor_plan(base_img, devices, groups,
-                                     st.session_state.selected_device_id)
+                                         st.session_state.selected_device_id)
 
         # Click-to-select using streamlit-image-coordinates
         # The component accepts PIL Images directly (anything with a .save method)
@@ -408,162 +409,181 @@ with col_map:
                 unsafe_allow_html=True,
             )
 
-        # Legend strip
         st.markdown("**Status legend**")
         leg_cols = st.columns(4)
-        for i, (status, label, colour) in enumerate([
-            ("ok",      "OK",      "#34a853"),
-            ("warning", "Warning", "#fbbc05"),
-            ("alert",   "Alert",   "#ea4335"),
-            ("offline", "Offline", "#bdc1c6"),
+        for i, (status, label, colour, count) in enumerate([
+            ("ok", "More Efficient", "#34a853", 2),
+            ("warning", "Less Efficient", "#ea4335", 3),
+            ("alert", "Average", "#bdc1c6", 8),
+            ("offline", "Other", "#fbbc05", 0),
         ]):
             leg_cols[i].markdown(
                 f"<span style='color:{colour};font-size:1rem;font-weight:900'>&#9679;</span> "
-                f"<span style='font-size:0.78rem;color:#1a2b4c'>{label} ({status_counts[status]})</span>",
+                f"<span style='font-size:0.78rem;color:#1a2b4c'>{label} ({count})</span>",
                 unsafe_allow_html=True,
             )
-
-
+with col_info:
+    with st.container(border=True):
+        st.title("Energy being lost to inefficiency")
+        st.subheader("13.6 Wh/m^2/hr")
+    with st.container(border=True):
+        st.title("Energy being saved due to efficiency")
+        st.subheader("3.6 Wh/m^2/hr")
+    with st.container(border=True):
+        st.title("Possible factors to inefficiencies")
+        st.subheader("Electrical Panel A is not working as intended")
+        st.subheader("BMS Node - Ward 3 is not working as intended")
+        st.subheader("BMS Node - ICU is not working as intended")
 # ── COLUMN 2: Device list ─────────────────────────────────────────────────────
-with col_list:
-    with st.container(border=True):
-        st.subheader("Devices")
-        st.caption("Click a device to view sensor readings")
+with col_average:
+    st.subheader("Average Energy Consumption")
 
-        # Filter controls
-        filter_status = st.multiselect(
-            "Filter by status",
-            options=["ok", "warning", "alert", "offline"],
-            default=["ok", "warning", "alert", "offline"],
-            label_visibility="collapsed",
-        )
-        filter_group = st.selectbox(
-            "Filter by group",
-            options=["All groups"] + groups,
-            label_visibility="collapsed",
-        )
+    df = pd.DataFrame({
+        'Ward': wards,
+        'Consumption': consumption
+    })
 
-        filtered = [
-            d for d in devices
-            if d.status in filter_status
-            and (filter_group == "All groups" or d.group == filter_group)
-        ]
+    fig = px.line(
+        df,
+        x='Ward',
+        y='Consumption',
+        labels={'Consumption': 'Wh/m²/hr', 'Ward': 'Ward'},
+        markers=True
+    )
 
-        if not filtered:
-            st.caption("No devices match the current filter.")
-        else:
-            for d in filtered:
-                is_active = d.id == st.session_state.selected_device_id
-                sc_hex = "#{:02x}{:02x}{:02x}".format(*STATUS_COLORS_RGB[d.status])
+    fig.update_traces(
+        hovertemplate='<b>%{x}</b><br>%{y} Wh/m²/hr<extra></extra>',
+        line=dict(color='#4a90d9', width=2.5),
+        marker=dict(size=7, color='#4a90d9', line=dict(color='#ffffff', width=1.5))
+    )
 
-                # Use a button as the row — Streamlit doesn't have a native
-                # clickable row component
-                clicked = st.button(
-                    f"{d.name}",
-                    key=f"btn_{d.id}",
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary",
-                )
-                if clicked:
-                    st.session_state.selected_device_id = (
-                        None if is_active else d.id
-                    )
-                    st.rerun()
+    fig.update_layout(
+        margin=dict(t=20, b=80, l=0, r=0),
+        paper_bgcolor='#f7f9fc',
+        plot_bgcolor='#f7f9fc',
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(size=9)
+        ),
+        yaxis=dict(
+            title='Wh/m²/hr'
+        ),
+        showlegend=False,
+        height=600
+    )
 
-                st.markdown(
-                    f"<div style='margin:-8px 0 4px 4px;font-size:0.74rem;color:#6b7280'>"
-                    f"{d.device_type} &nbsp;·&nbsp; {d.group} &nbsp;"
-                    f"<span style='color:{sc_hex};font-weight:700'>"
-                    f"&#9679; {d.status.upper()}</span></div>",
-                    unsafe_allow_html=True,
-                )
+    st.plotly_chart(fig, use_container_width=True)
+with col_current:
+    st.subheader("Current Energy Consumption")
 
+    df = pd.DataFrame({
+        'Ward': wards,
+        'Consumption': edited_consumption
+    })
 
-# ── COLUMN 3: Detail panel ────────────────────────────────────────────────────
-with col_detail:
-    with st.container(border=True):
-        selected = (
-            backend.get_device(st.session_state.selected_device_id)
-            if st.session_state.selected_device_id
-            else None
-        )
+    fig = px.line(
+        df,
+        x='Ward',
+        y='Consumption',
+        labels={'Consumption': 'Wh/m²/hr', 'Ward': 'Ward'},
+        markers=True
+    )
 
-        if selected is None:
-            st.subheader("Device Detail")
-            st.caption("Select a device on the floor plan or from the list to view sensor readings.")
-            st.markdown(
-                "<div class='upload-hint' style='margin-top:16px'>"
-                "Click any dot on the floor plan, or use the device list on the left."
-                "</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            sc_hex = "#{:02x}{:02x}{:02x}".format(*STATUS_COLORS_RGB[selected.status])
+    fig.update_traces(
+        hovertemplate='<b>%{x}</b><br>%{y} Wh/m²/hr<extra></extra>',
+        line=dict(color='#e07b54', width=2.5),
+        marker=dict(size=7, color='#e07b54', line=dict(color='#ffffff', width=1.5))
+    )
 
-            # Device header
-            st.subheader(selected.name)
-            st.markdown(
-                f"{status_pill_html(selected.status)}"
-                f"&nbsp; <span style='font-size:0.78rem;color:#6b7280'>"
-                f"{selected.device_type} · {selected.group}</span>",
-                unsafe_allow_html=True,
-            )
+    fig.update_layout(
+        margin=dict(t=20, b=80, l=0, r=0),
+        paper_bgcolor='#f7f9fc',
+        plot_bgcolor='#f7f9fc',
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(size=9)
+        ),
+        yaxis=dict(
+            title='Wh/m²/hr'
+        ),
+        showlegend=False,
+        height=600
+    )
 
-            reason_class = f"reason-{selected.status}"
-            st.markdown(
-                f"<p class='{reason_class}'>{selected.status_reason}</p>",
-                unsafe_allow_html=True,
-            )
+    st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown(
-                f"<p style='font-size:0.75rem;color:#9ca3af;margin:0'>"
-                f"Position: ({selected.x_pct:.0f} %, {selected.y_pct:.0f} %)</p>",
-                unsafe_allow_html=True,
-            )
+with col_dif:
+    st.subheader("Energy Consumption Comparison")
 
-            st.divider()
+    df = pd.DataFrame({
+        'Ward': wards,
+        'Average': consumption,
+        'Current': edited_consumption
+    })
 
-            # Sensor readings
-            st.markdown(
-                f"<p style='font-weight:600;font-size:0.82rem;color:#6b7280;"
-                f"text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px'>"
-                f"Sensor Readings</p>",
-                unsafe_allow_html=True,
-            )
+    fig = go.Figure()
 
-            if not selected.readings:
-                st.caption("No readings available.")
-            else:
-                rows_html = ""
-                for r in selected.readings:
-                    val_str = str(r.value)
-                    if isinstance(r.value, bool):
-                        val_str = "Yes" if r.value else "No"
-                    rows_html += (
-                        f"<div class='reading-row'>"
-                        f"<span class='reading-label'>{r.label}</span>"
-                        f"<span>"
-                        f"<span class='reading-value'>{val_str}</span>"
-                        f"<span class='reading-unit'>{r.unit}</span>"
-                        f"<span class='reading-ts'>{r.last_updated}</span>"
-                        f"</span>"
-                        f"</div>"
-                    )
-                st.markdown(rows_html, unsafe_allow_html=True)
+    # Shade red where Current > Average
+    fig.add_trace(go.Scatter(
+        x=df['Ward'].tolist() + df['Ward'].tolist()[::-1],
+        y=df['Current'].tolist() + df['Average'].tolist()[::-1],
+        fill='toself',
+        fillcolor='rgba(220, 80, 80, 0.2)',
+        line=dict(color='rgba(255,255,255,0)'),
+        hoverinfo='skip',
+        showlegend=True,
+        name='Above Average'
+    ))
 
-            st.divider()
+    # Shade green where Current < Average
+    fig.add_trace(go.Scatter(
+        x=df['Ward'].tolist() + df['Ward'].tolist()[::-1],
+        y=df['Average'].tolist() + df['Current'].tolist()[::-1],
+        fill='toself',
+        fillcolor='rgba(80, 180, 80, 0.2)',
+        line=dict(color='rgba(255,255,255,0)'),
+        hoverinfo='skip',
+        showlegend=True,
+        name='Below Average'
+    ))
 
-            # AI status placeholder
-            st.markdown(
-                "<p style='font-weight:600;font-size:0.78rem;color:#9ca3af;"
-                "text-transform:uppercase;letter-spacing:0.06em'>AI Status Model</p>",
-                unsafe_allow_html=True,
-            )
-            st.caption(
-                "AI-driven status inference is not yet connected. "
-                "Status is currently supplied directly by the backend."
-            )
+    fig.add_trace(go.Scatter(
+        x=df['Ward'],
+        y=df['Average'],
+        mode='lines+markers',
+        name='Average',
+        hovertemplate='<b>%{x}</b><br>Average: %{y} Wh/m²/hr<extra></extra>',
+        line=dict(color='#4a90d9', width=2.5),
+        marker=dict(size=7, color='#4a90d9', line=dict(color='#ffffff', width=1.5))
+    ))
 
-            if st.button("Deselect device", use_container_width=True):
-                st.session_state.selected_device_id = None
-                st.rerun()
+    fig.add_trace(go.Scatter(
+        x=df['Ward'],
+        y=df['Current'],
+        mode='lines+markers',
+        name='Current',
+        hovertemplate='<b>%{x}</b><br>Current: %{y} Wh/m²/hr<extra></extra>',
+        line=dict(color='#e07b54', width=2.5),
+        marker=dict(size=7, color='#e07b54', line=dict(color='#ffffff', width=1.5))
+    ))
+
+    fig.update_layout(
+        margin=dict(t=20, b=80, l=0, r=0),
+        paper_bgcolor='#f7f9fc',
+        plot_bgcolor='#f7f9fc',
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(size=9)
+        ),
+        yaxis=dict(title='Wh/m²/hr'),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='right',
+            x=1
+        ),
+        height=600
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
